@@ -4,8 +4,7 @@ import threading
 import logging
 from functools import wraps
 from time import time
-from .nameddict import Nameddict
-from .miscellaneous import next_id
+from nameddict import Nameddict
 
 def _profiling(start,sql=''):
     t=time()-start
@@ -68,7 +67,7 @@ def create_engine(user,passwd,database,host='127.0.0.1',port=3306,**kwargs):
     engine=_Engine(lambda:mysql.connector.connect(**params))
     logging.info("Init mysql engine {} ok".format(hex(id(engine))))
 
-
+create_engine(user='root', passwd='123', database='awesome')
 
 class _DbContex(threading.local):
     def __init__(self):
@@ -179,6 +178,7 @@ def insert(table_name,**kwargs):
     cols,args=zip(*kwargs.items())
     sql='insert into {} ({}) values ({})'.format(table_name
     ,','.join([col for col in cols]),','.join(['?' for i in range(len(cols))]))
+    print(sql)
     return _update(sql,*args)
 
 def update(sql,*args):
