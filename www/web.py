@@ -5,7 +5,7 @@ __author__ = 'Henry Wang'
 
 import cgi
 from nameddict import Nameddict
-import urllib
+import urllib.parse
 from http_data import *
 import datetime
 from utc import UTC
@@ -14,6 +14,7 @@ import os, mimetypes, logging, sys
 import types
 import traceback
 from io import StringIO
+from functools import wraps
 
 ctx = threading.local()
 
@@ -31,7 +32,7 @@ def _unquote(s):
 class HttpError(Exception):
     def __init__(self, code):
         super(HttpError, self).__init__()
-        self.status = '{}{}'.format(code, RESPONSE_STATUSES[code])
+        self.status = '{} {}'.format(code, RESPONSE_STATUSES[code])
 
     def header(self, name, value):
         if not hasattr(self, '_headers'):
@@ -98,7 +99,6 @@ def get(path):
         func.__web_route__ = path
         func.__web_method__ = 'GET'
         return func
-
     return decorator
 
 
@@ -107,7 +107,6 @@ def post(path):
         func.__web_route__ = path
         func.__web_method__ = 'GET'
         return func
-
     return decorator
 
 
@@ -141,7 +140,7 @@ class Route:
     def __init__(self, func):
         self.path = func.__web_route__
         self.method = func.__web_method__
-        self.is_static = _re_route(self.path) is None
+        self.is_static = _re_route.search(self.path) is None
         if not self.is_static:
             self.route = re.compile(_build_regex(self.path))
         self.func = func
@@ -179,9 +178,8 @@ class StaticFileRoute:
         self.route = re.compile(r'^/static/(.+)$')
 
     def match(self, url):
-        m = self.route.search(url)
-        if m:
-            return m.groups()
+        if url.startswith('/static/'):
+            return url[1:],
         return None
 
     def __call__(self, *args, **kwargs):
@@ -318,7 +316,8 @@ class Response:
                 L.append('Expires={}'.format(expires.astimezone(UTC_ZERO)).
                          strftime('%a, %d-%b-%Y %H:%M:%S GMT'))
         elif isinstance(max_age, int):
-            L.append('Max_age={}'.format(max_age))
+            L.append('Max-age={}'.format(max_age))
+        L.append('Path={}'.format(path))
         if domain:
             L.append('Domain={}'.format(domain))
         if secure:
@@ -386,8 +385,7 @@ class TemplateEngine:
 class Jinja2TemplateEngine(TemplateEngine):
     def __init__(self, template_dir, **kwargs):
         from jinja2 import Environment, FileSystemLoader
-
-        if not 'autoescape' in kw:
+        if 'autoescape' not in kwargs:
             kwargs['autoescape'] = True
         self._env = Environment(loader=FileSystemLoader(template_dir), **kwargs)
 
@@ -401,19 +399,19 @@ class Jinja2TemplateEngine(TemplateEngine):
 def _default_error_handler(e, start_response):
     if isinstance(e, HttpError):
         logging.info('HttpError {}'.format(e.status))
-        headers = e.headers[:]
-        headers.append(('Content-Type', 'text_html'))
-        start_response(e.status, headers)
-        return '<html><body><h1>%s</h1></body></html>'.format(e.status)
+        e.header('Content-Type', 'text/html')
+        start_response(e.status, e.headers)
+        return '<html><body><h1>%s</h1></body></html>'.format(e.status).encode('utf8')
     logging.exception('Exception')
     internal = internalerror()
     internal.header('Content-Type', 'text/html')
     start_response(internal.status, internal.headers)
-    return '<html><body><h1>500 Internal Server Error</h1><h3>%s</h3></body></html>'.format(str(internal))
+    return '<html><body><h1>500 Internal Server Error</h1><h3>{!s}</h3></body></html>'.format(internal).encode(utf8)
 
 
 def view(path):
     def decorator(func):
+        @wraps(func)
         def wrapper(*args, **kwargs):
             r = func(*args, **kwargs)
             if isinstance(r, dict):
@@ -433,10 +431,10 @@ RE_INTERCEPTOR_ENDS_WITH = re.compile(r'^\*([^\*\?]+)$')
 def _build_pattern_fn(pattern):
     m = RE_INTERCEPTOR_STARTS_WITH.search(pattern)
     if m:
-        return lambda p: p.startswith(m.gourp(1))
+        return lambda p: p.startswith(m.group(1))
     m = RE_INTERCEPTOR_ENDS_WITH.search(pattern)
     if m:
-        return lambda p: p.endswith(m.gourp(1))
+        return lambda p: p.endswith(m.group(1))
     raise ValueError('invalid pattern definition in interceptor')
 
 
@@ -496,7 +494,6 @@ class WSGIApplication:
         self._get_dynamic = []
         self._post_dynamic = []
 
-
     def _check_out_running(self):
         if self._running:
             raise RuntimeError('Cannot modify WSGIApplication when running')
@@ -515,9 +512,24 @@ class WSGIApplication:
         m = mod if type(mod) == types.ModuleType else _load_module(mod)
         logging.info('add module:{}'.format(m.__name__))
         for name in dir(m):
-            fn = getattr(m.name)
+            fn = getattr(m, name)
             if callable(fn) and hasattr(fn, '__web_route__') and hasattr(fn, '__web_method__'):
                 self.add_url(fn)
+
+    def add_url(self,func):
+        self._check_out_running()
+        route=Route(func)
+        if route.is_static:
+            if route.method=='GET':
+                self._get_static[route.path]=route
+            if route.method=='POST':
+                self._post_static[route.path]=route
+        else:
+            if route.method=='GET':
+                self._get_dynamic.append(route)
+            if route.method=='POST':
+                self._post_dynamic.append(route)
+        logging.info('add route: {!s}'.format(route))
 
     def add_interceptor(self, func):
         self._check_out_running()

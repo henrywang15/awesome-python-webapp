@@ -67,7 +67,6 @@ def create_engine(user,passwd,database,host='127.0.0.1',port=3306,**kwargs):
     engine=_Engine(lambda:mysql.connector.connect(**params))
     logging.info("Init mysql engine {} ok".format(hex(id(engine))))
 
-create_engine(user='root', passwd='123', database='awesome')
 
 class _DbContex(threading.local):
     def __init__(self):
