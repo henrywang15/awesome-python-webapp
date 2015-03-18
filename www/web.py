@@ -15,6 +15,7 @@ import types
 import traceback
 from io import StringIO
 from functools import wraps
+from types import GeneratorType
 
 ctx = threading.local()
 
@@ -262,7 +263,7 @@ class Request:
     request_method = property(lambda self: self._environ['request_method'.upper()])
     path_info = property(lambda self: _unquote(self._environ.get('path_info'.upper(), '')))
     http_host = property(lambda self: self._environ.get('http_host'.upper(), ''))
-    headers = property(lambda self: Nameddict(**self._get_headers))
+    headers = property(lambda self: Nameddict(**self._get_headers().read))
     header = property(lambda self, header, default=None: self._get_headers.get(header.upper(), default))
     cookies = property(lambda self: Nameddict(**self._get_cookies()))
     cookie = property(lambda self, name, default=None: self._get_cookies().get(name, default))
@@ -406,7 +407,7 @@ def _default_error_handler(e, start_response):
     internal = internalerror()
     internal.header('Content-Type', 'text/html')
     start_response(internal.status, internal.headers)
-    return '<html><body><h1>500 Internal Server Error</h1><h3>{!s}</h3></body></html>'.format(internal).encode(utf8)
+    return '<html><body><h1>500 Internal Server Error</h1><h3>{!s}</h3></body></html>'.format(internal).encode('utf8')
 
 
 def view(path):
@@ -573,7 +574,7 @@ class WSGIApplication:
                 raise notfound()
             raise badrequest()
 
-        fn_exec = _build_interceptor_fn(fn_route, *self._interceptors)
+        fn_exec = _build_interceptor_chain(fn_route, *self._interceptors)
 
         def wsgi(environ, start_response):
             ctx.application = _application
@@ -581,16 +582,20 @@ class WSGIApplication:
             response = ctx.response = Response()
             try:
                 r = fn_exec()
+                start_response(response.status, response.headers)
                 if isinstance(r, Template):
                     r = self._template_engine(r.template_name, r.model)
-                start_response(response.status, response.headers)
-                return r
+                    yield r.encode('utf8')
+                elif isinstance(r,GeneratorType):
+                    # return list(r)
+                    yield list(r)[0]
             except RedirectError as e:
                 response.set_header('Location', e.location)
                 start_response(e.status, response.headers)
             except HttpError as e:
                 start_response(e.status, response.headers)
-                return ['<html><body><h1>{}</h1></body></html>'.format(e.status).encode('utf8')]
+                yield self._template_engine('notfound.html', {}).encode('utf8')
+                # return ['<html><body><h1>{}</h1></body></html>'.format(e.status).encode('utf8')]
             except Exception as e:
                 logging.exception(e)
                 if not debug:
