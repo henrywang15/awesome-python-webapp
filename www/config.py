@@ -32,7 +32,8 @@ def toNamedDict(d):
 try:
     import config_user
 
-    configs = toNamedDict(merge(configs, config_user.configs))
+    configs = merge(configs, config_user.configs)
 except ImportError:
     pass
 
+configs = toNamedDict(configs)

@@ -6,10 +6,12 @@ __author__ = 'Henry Wang'
 
 from web import get,view
 
-from models import User
+from models import User,Blog
 
-@view('test_users.html')
+
+@view('blogs.html')
 @get('/')
-def test_users():
-    users=User.find_all()
-    return dict(users=users)
+def index():
+    blogs = Blog.find_all()
+    user = User.find_first('where email=?', 'admin@example.com')
+    return dict(blogs=blogs,user=user)

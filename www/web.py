@@ -587,14 +587,15 @@ class WSGIApplication:
                     r = self._template_engine(r.template_name, r.model)
                     yield r.encode('utf8')
                 elif isinstance(r,GeneratorType):
-                    # return list(r)
-                    yield list(r)[0]
+                    for subr in r:
+                        yield subr
             except RedirectError as e:
                 response.set_header('Location', e.location)
                 start_response(e.status, response.headers)
             except HttpError as e:
+                response.set_header('Content-type','text/plain')
                 start_response(e.status, response.headers)
-                yield self._template_engine('notfound.html', {}).encode('utf8')
+                yield b'Not Found'
                 # return ['<html><body><h1>{}</h1></body></html>'.format(e.status).encode('utf8')]
             except Exception as e:
                 logging.exception(e)
