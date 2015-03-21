@@ -589,6 +589,8 @@ class WSGIApplication:
                 elif isinstance(r,GeneratorType):
                     for subr in r:
                         yield subr
+                else:
+                    yield r.encode('utf8')
             except RedirectError as e:
                 response.set_header('Location', e.location)
                 start_response(e.status, response.headers)
