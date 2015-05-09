@@ -106,7 +106,7 @@ def get(path):
 def post(path):
     def decorator(func):
         func.__web_route__ = path
-        func.__web_method__ = 'GET'
+        func.__web_method__ = 'POST'
         return func
     return decorator
 
@@ -227,7 +227,7 @@ class Request:
 
     def input(self, **kwargs):
         kwargs = Nameddict(**kwargs)
-        for k, v in self._get_raw_input():
+        for k, v in self._get_raw_input().items():
             kwargs[k] = v[0] if isinstance(v, list) else v
         return kwargs
 
@@ -311,11 +311,11 @@ class Response:
         L = ['{}={}'.format(_quote(name), _quote(value))]
         if expires is not None:
             if isinstance(expires, int):
-                L.append('Expires={}'.format(datetime.datetime.fromtimestamp(expires, UTC_ZERO)).
-                         strftime('%a, %d-%b-%Y %H:%M:%S GMT'))
+                L.append('Expires={}'.format(datetime.datetime.fromtimestamp(expires, UTC_ZERO).
+                         strftime('%a, %d-%b-%Y %H:%M:%S GMT')))
             if isinstance(expires, (datetime.datetime, datetime.date)):
-                L.append('Expires={}'.format(expires.astimezone(UTC_ZERO)).
-                         strftime('%a, %d-%b-%Y %H:%M:%S GMT'))
+                L.append('Expires={}'.format(expires.astimezone(UTC_ZERO).
+                         strftime('%a, %d-%b-%Y %H:%M:%S GMT')))
         elif isinstance(max_age, int):
             L.append('Max-age={}'.format(max_age))
         L.append('Path={}'.format(path))
@@ -443,7 +443,6 @@ def interceptor(pattern='/'):
     def decorator(func):
         func.__interceptor__ = _build_pattern_fn(pattern)
         return func
-
     return decorator
 
 

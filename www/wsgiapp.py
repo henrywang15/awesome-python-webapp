@@ -3,11 +3,13 @@
 
 __author__ = 'Henry Wang'
 
-import os,time
+import os, time
 
 from datetime import datetime
 
-import logging; logging.basicConfig(level=logging.INFO)
+import logging
+
+logging.basicConfig(level=logging.INFO)
 
 import db
 from web import WSGIApplication,Jinja2TemplateEngine
@@ -29,13 +31,20 @@ def datetime_filter(t):
 
 db.create_engine(**configs.db)
 
-wsgi=WSGIApplication(os.path.dirname(os.path.abspath(__file__)))
-wsgi.template_engine=Jinja2TemplateEngine(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates'))
+wsgi = WSGIApplication(os.path.dirname(os.path.abspath(__file__)))
+
+template_engine = Jinja2TemplateEngine(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'templates'))
+template_engine.add_filter('datetime', datetime_filter)
+wsgi.template_engine = template_engine
+
 
 import urls
+
+wsgi.add_interceptor(urls.user_interceptor)
 wsgi.add_module(urls)
 
+
 if __name__=='__main__':
-    wsgi.run(9000,host='0.0.0.0')
+    wsgi.run(9000,host='127.0.0.1')
 else:
     application = wsgi.get_wsgi_application()
