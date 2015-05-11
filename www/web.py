@@ -202,7 +202,7 @@ class Request:
 
     def _parse_input(self):
         params = cgi.FieldStorage(fp=self._environ['wsgi.input'], environ=self._environ, keep_blank_values=1)
-        return {key: params[key] for key in params}
+        return {key: params[key].value for key in params}
 
     def _get_raw_input(self):
         if not hasattr(self, '_raw_input'):

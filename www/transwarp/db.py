@@ -148,7 +148,7 @@ def select_int(sql,*args):
     d=_select(sql,True,*args)
     if len(d)!=1:
         raise MultiColumnsError('Expected only one column.')
-    return d.values()[0]
+    return list(d.values())[0]
 
 @with_connection
 def select(sql,*args):

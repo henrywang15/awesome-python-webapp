@@ -141,9 +141,9 @@ if (! Number.prototype.toDateTime) {
 function gotoPage(index) {
     if (index) {
         var search = location.search;
-        var hasPageParam = search.search(/page\=\d+\&?/)!==(-1);
+        var hasPageParam = search.search(/page=\d+&?/)!==(-1);
         if (hasPageParam) {
-            search = search.replace(/page\=\d+\&?/g, '');
+            search = search.replace(/page=\d+&?/g, '');
         }
         search = (search==='' || search==='?') ? ('?page=' + index) : (search + '&page=' + index);
         location.assign(search);

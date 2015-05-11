@@ -5,9 +5,10 @@ __author__ = 'Henry Wang'
 
 import re, hashlib, time
 from web import get, view, ctx, post, interceptor,seeother
-from apis import api, APIError, APIValueError, APIPermissionError, APIResourceNotFoundError
+from apis import api, Page, APIError, APIValueError, APIPermissionError, APIResourceNotFoundError
 from models import User, Blog
 from config import configs
+import markdown2
 
 _COOKIE_NAME = 'awesession'
 _COOKIE_KEY = configs.session.secret
@@ -17,13 +18,25 @@ _RE_MD5 = re.compile(r'^[0-9a-f]{32}$')
 _RE_EMAIL = re.compile(r'^[a-z0-9\.\-_]+\@[a-z0-9\-_]+(\.[a-z0-9\-_]+){1,4}$')
 
 
+def _get_page_index():
+    page_index = 1
+    try:
+        page_index = int(ctx.request.get('page', '1'))
+    except ValueError:
+        pass
+    return page_index
+
+def _get_blogs_by_page():
+    total = Blog.count_all()
+    page= Page(total,_get_page_index())
+    blogs = Blog.find_by('order by created_at desc limit ?,?',page.offset,page.limit)
+    return blogs,page
+
 @view('blogs.html')
 @get('/')
 def index():
     blogs = Blog.find_all()
-    # user = User.find_first('where email=?', 'admin@example.com')
-    user= ctx.request.user
-    return dict(blogs=blogs, user=user)
+    return dict(blogs=blogs, user=ctx.request.user)
 
 
 @api
@@ -39,9 +52,9 @@ def api_get_users():
 @post('/api/users')
 def register_user():
     i = ctx.request.input(name='', email='', password='')
-    name = i.name.value.strip()
-    email = i.email.value.strip().lower()
-    password = i.password.value
+    name = i.name.strip()
+    email = i.email.strip().lower()
+    password = i.password
     if not name:
         raise APIValueError('name')
     if not email or not _RE_EMAIL.search(email):
@@ -81,9 +94,9 @@ def make_signed_cookie(id, password, max_age):
 @post('/api/authenticate')
 def authenticate():
     i = ctx.request.input(remember='',email='',password='')
-    email = i.email.value.strip().lower()
-    password = i.password.value
-    remember = i.remember.value
+    email = i.email.strip().lower()
+    password = i.password
+    remember = i.remember
     user = User.find_first('where email=?',email)
     if user is None:
         raise APIError('auth:failed','email','Invalid email.')
@@ -94,6 +107,20 @@ def authenticate():
     ctx.response.set_cookie(_COOKIE_NAME,cookie)
     return user
 
+def check_admin():
+    user = ctx.request.user
+    if user and user.admin:
+        return
+    raise APIPermissionError('No permission.')
+
+
+@interceptor('/manage/')
+def manager_interceptor(next):
+    user=ctx.request.user
+    if user and user.admin:
+        return next()
+    raise seeother('/signin')
+
 
 @interceptor('/')
 def user_interceptor(next):
@@ -103,6 +130,8 @@ def user_interceptor(next):
         user=parse_signed_cookie(cookie)
     ctx.request.user = user
     return next()
+
+
 
 
 def parse_signed_cookie(cookie_str):
@@ -122,6 +151,48 @@ def parse_signed_cookie(cookie_str):
     except Exception as e:
         return None
 
+
+@api
+@get('/api/blogs')
+def api_get_blogs():
+    format= ctx.request.get('format','')
+    blogs,page = _get_blogs_by_page()
+    if format=='html':
+        for blog in blogs:
+            blog.content = markdown2.mardown(blog.content)
+    return dict(blogs=blogs,page=page)
+
+
+@api
+@post('/api/blogs')
+def api_create_blog():
+    input = ctx.request.input(name='',summary='',content='')
+    name=input.name.strip()
+    summary=input.summary.strip()
+    content=input.content.strip()
+    if not name:
+        raise APIValueError('name','name cannot be empty')
+    if not summary:
+        raise APIValueError('summary','summary cannot be empty')
+    if not content:
+        raise APIValueError('content','content cannot be empty')
+    user=ctx.request.user
+    blog = Blog(user_id=user.id,user_name=user.name,name=name,summary=summary,content=content)
+    blog.insert()
+    return blog
+
+@view('manage_blog_list.html')
+@get('/manage/blogs')
+def manage_blogs():
+    page_index =_get_page_index()
+    print(page_index)
+    return dict(page_index=page_index,user=ctx.request.user)
+
+
+@view('manage_blog_edit.html')
+@get('/manage/blogs/create')
+def manage_blogs_create():
+    return dict(id=None, action='/api/blogs', redirect='/manage/blogs', user=ctx.request.user)
 
 @get('/signout')
 def signout():
