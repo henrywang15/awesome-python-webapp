@@ -232,16 +232,16 @@ class Model(dict, metaclass=ModelMetaclass):
                 args.append(arg)
         pk = self.__primary_key__.name
         args.append(getattr(self, pk))
-        print('update `%s` set %s where %s=?' % (self.__table__, ','.join(L), pk), *args)
-        # db.update('update `%s` set %s where %s=?' % (self.__table__, ','.join(L), pk), *args)
+        # print('update `%s` set %s where %s=?' % (self.__table__, ','.join(L), pk), *args)
+        db.update('update `%s` set %s where %s=?' % (self.__table__, ','.join(L), pk), *args)
         return self
 
     def delete(self):
         self.pre_delete and self.pre_delete()
         pk = self.__primary_key__.name
         args = (getattr(self, pk),)
-        print('delete from `%s` where `%s`=?' % (self.__table__, pk), *args)
-        # db.update('delete from `%s` where `%s`=?' % (self.__table__, pk), *args)
+        # print('delete from `%s` where `%s`=?' % (self.__table__, pk), *args)
+        db.update('delete from `%s` where `%s`=?' % (self.__table__, pk), *args)
         return self
 
 
